@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>report.html</h1>
+    <p>Report generated on 11-May-2024 at 22:56:10 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>BUILD_ID</td>
+        <td>13</td></tr>
+      <tr>
+        <td>BUILD_NUMBER</td>
+        <td>13</td></tr>
+      <tr>
+        <td>BUILD_TAG</td>
+        <td>jenkins-ConnectaMobile-13</td></tr>
+      <tr>
+        <td>BUILD_URL</td>
+        <td><a href="http://localhost:8080/job/ConnectaMobile/13/" target="_blank">http://localhost:8080/job/ConnectaMobile/13/</a></td></tr>
+      <tr>
+        <td>CI</td>
+        <td>true</td></tr>
+      <tr>
+        <td>EXECUTOR_NUMBER</td>
+        <td>1</td></tr>
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>C:\Program Files\Java\jdk-17.0.1</td></tr>
+      <tr>
+        <td>JENKINS_URL</td>
+        <td><a href="http://localhost:8080/" target="_blank">http://localhost:8080/</a></td></tr>
+      <tr>
+        <td>JOB_NAME</td>
+        <td>ConnectaMobile</td></tr>
+      <tr>
+        <td>NODE_NAME</td>
+        <td>built-in</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "1.0.0", "py": "1.11.0", "pytest": "7.1.3"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.22621-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"allure-pytest": "2.13.2", "html": "3.1.1", "metadata": "2.0.2"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.10.6</td></tr>
+      <tr>
+        <td>WORKSPACE</td>
+        <td>C:\Users\SATISH\PycharmProjectOne\Connecta</td></tr></table>
+    <h2>Summary</h2>
+    <p>6 tests ran in 468.27 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">1 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">5 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_DeviceWithPlan.py::TestDevicePlan::test_DevicePlan</td>
+          <td class="col-duration">67.47</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="test_DeviceWithPlan.py_TestDevicePlan_test_DevicePlan.png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">self = &lt;tests.test_DeviceWithPlan.TestDevicePlan object at 0x000001E37D6D03A0&gt;<br/><br/>    def test_DevicePlan(self):<br/>        self.driver.maximize_window()<br/>        self.implicitlyWaitTime(5)<br/>        Dplan = DevicePlan(self.driver)<br/>        # Dplan.getPlanPage().click()<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 1000);&quot;)<br/>        self.selectionOptionByText(Dplan.getPlanLines(), &quot;1&quot;)<br/>        Dplan.getAddPlan().click()<br/>        # Dplan.getAllDevice().click()<br/>        Dplan.getDevice1().click()<br/>        Dplan.getAdd_toCard().click()<br/>        Dplan.getGo_toCard().click()<br/>        Dplan.getBilling_Zip().send_keys(&quot;30344&quot;)<br/>        Dplan.getUpdate_Button().click()<br/>        wait = WebDriverWait(self.driver, 10)<br/>        wait.until(expected_conditions.element_to_be_clickable((By.XPATH, &quot;//button[text()=&#x27;Proceed to Checkout&#x27;]&quot;)))<br/>        Dplan.getProceed_toCheckout().click()<br/>        Dplan.getEmail().send_keys(&quot;testorder@vcaremail.com&quot;)<br/>        Dplan.getPhone().send_keys(&quot;1234567890&quot;)<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 500);&quot;)<br/>        Dplan.get_Continue_Page().click()<br/>        Dplan.get_eBillingAddress1().send_keys(&quot;2982 DUKE OF WINDSOR&quot;)<br/>        Dplan.get_eBillingAddress2().click()<br/>        try:<br/>            wait = WebDriverWait(self.driver, 10)<br/>            wait.until(expected_conditions.presence_of_element_located((By.XPATH, &quot;//button[text()=&#x27;Proceed&#x27;]&quot;)))<br/>        except Exception as e:<br/>            print(e)<br/>    <br/>        try:<br/>            Dplan.get_Address_suggetion().click()<br/>        except Exception as e:<br/>            print(e)<br/>    <br/>        self.driver.execute_script(&quot;window.scrollBy(0, 900);&quot;)<br/>        Dplan.getShippingMethod().click()<br/>        self.selectionOptionByText(Dplan.getHear_About(), &quot;14&quot;)<br/>        Dplan.getAfter_shipping_Continue().click()<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 1500);&quot;)<br/>        Dplan.getName_onCard().send_keys(&quot;TestCard&quot;)<br/>        Dplan.getCard_Number().send_keys(&quot;4111111111111111&quot;)<br/>        self.selectionOptionByText(Dplan.getExp_Month(), &quot;03&quot;)<br/>        self.selectionOptionByText(Dplan.getExp_Year(), &quot;2026&quot;)<br/>        Dplan.getCard_CVV().send_keys(&quot;231&quot;)<br/>        # self.driver.execute_script(&quot;window.scrollBy(0, 2200);&quot;)<br/>        Dplan.getAfterCard_Continue().click()<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 2200);&quot;)<br/>        # time.sleep(3)<br/>        ########################################################<br/>        wait = WebDriverWait(self.driver, 10)<br/>        wait.until(expected_conditions.element_to_be_clickable((By.ID, &quot;fifth&quot;)))<br/>&gt;       Dplan.getAfter_TransfPhone_Continue().click()<br/><br/>test_DeviceWithPlan.py:63: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/>..\..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\selenium\webdriver\remote\webelement.py:88: in click<br/>    self._execute(Command.CLICK_ELEMENT)<br/>..\..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\selenium\webdriver\remote\webelement.py:396: in _execute<br/>    return self._parent.execute(command, params)<br/>..\..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\selenium\webdriver\remote\webdriver.py:428: in execute<br/>    self.error_handler.check_response(response)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x000001E37D6D1450&gt;<br/>response = {&#x27;status&#x27;: 400, &#x27;value&#x27;: &#x27;{&quot;value&quot;:{&quot;error&quot;:&quot;element click intercepted&quot;,&quot;message&quot;:&quot;element click intercepted: Element ...07FF73B7D9B94]\\n\\tBaseThreadInitThunk [0x00007FFF7E0D257D+29]\\n\\tRtlUserThreadStart [0x00007FFF7F2EAA48+40]\\n&quot;}}&#x27;}<br/><br/>    def check_response(self, response: Dict[str, Any]) -&gt; None:<br/>        &quot;&quot;&quot;<br/>        Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>        :Args:<br/>         - response - The JSON response from the WebDriver server as a dictionary<br/>           object.<br/>    <br/>        :Raises: If the response contains an error message.<br/>        &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if not status or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen: str = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, str):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if not status:<br/>                        status = value.get(&quot;status&quot;, ErrorCode.UNKNOWN_ERROR)<br/>                        message = value.get(&quot;value&quot;) or value.get(&quot;message&quot;)<br/>                        if not isinstance(message, str):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class: Type[WebDriverException]<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_SHADOW_ROOT:<br/>            exception_class = NoSuchShadowRootException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if not value:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, str):<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None  # type: ignore[assignment]<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        st_value = value.get(&#x27;stackTrace&#x27;) or value.get(&#x27;stacktrace&#x27;)<br/>        if st_value:<br/>            if isinstance(st_value, str):<br/>                stacktrace = st_value.split(&#x27;\n&#x27;)<br/>            else:<br/>                stacktrace = []<br/>                try:<br/>                    for frame in st_value:<br/>                        line = frame.get(&quot;lineNumber&quot;, &quot;&quot;)<br/>                        file = frame.get(&quot;fileName&quot;, &quot;&lt;anonymous&gt;&quot;)<br/>                        if line:<br/>                            file = f&quot;{file}:{line}&quot;<br/>                        meth = frame.get(&#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                        if &#x27;className&#x27; in frame:<br/>                            meth = &quot;{}.{}&quot;.format(frame[&#x27;className&#x27;], meth)<br/>                        msg = &quot;    at %s (%s)&quot;<br/>                        msg = msg % (meth, file)<br/>                        stacktrace.append(msg)<br/>                except TypeError:<br/>                    pass<br/>        if exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)  # type: ignore[call-arg]  # mypy is not smart enough here<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.ElementClickInterceptedException: Message: element click intercepted: Element &lt;button id=&quot;fifth&quot;&gt;...&lt;/button&gt; is not clickable at point (206, 556). Other element would receive the click: &lt;input onkeypress=&quot;return isNumber(event)&quot; type=&quot;text&quot; name=&quot;cust_mdn[]&quot; id=&quot;cust_mdn_1&quot; placeholder=&quot;Current Number&quot; autocomplete=&quot;off&quot; class=&quot;form-control  paymentDetail portin_mdn_validate byodment&quot; autofocus=&quot;&quot; value=&quot;&quot; style=&quot;border: 2px solid rgb(206, 212, 218); max-width: 100% !important;&quot; maxlength=&quot;10&quot;&gt;</span><br/><span class="error">E         (Session info: chrome=124.0.6367.119)</span><br/><span class="error">E       Stacktrace:</span><br/><span class="error">E       	GetHandleVerifier [0x00007FF73B877032+63090]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B7E2C82]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B67EC65]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6CBB34]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6C9954]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6C7164]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6C5EF9]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6BA708]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6E6FDA]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6BA00A]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6E71F0]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B703412]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6E6D83]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6B83A8]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6B9441]</span><br/><span class="error">E       	GetHandleVerifier [0x00007FF73BC725AD+4238317]</span><br/><span class="error">E       	GetHandleVerifier [0x00007FF73BCAF70D+4488525]</span><br/><span class="error">E       	GetHandleVerifier [0x00007FF73BCA79EF+4456495]</span><br/><span class="error">E       	GetHandleVerifier [0x00007FF73B950576+953270]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B7EE54F]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B7E9224]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B7E935B]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B7D9B94]</span><br/><span class="error">E       	BaseThreadInitThunk [0x00007FFF7E0D257D+29]</span><br/><span class="error">E       	RtlUserThreadStart [0x00007FFF7F2EAA48+40]</span><br/><br/>..\..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\selenium\webdriver\remote\errorhandler.py:243: ElementClickInterceptedException<br/> ------------------------------Captured stdout call------------------------------ <br/>Message: 
+Stacktrace:
+	GetHandleVerifier [0x00007FF73B877032+63090]
+	(No symbol) [0x00007FF73B7E2C82]
+	(No symbol) [0x00007FF73B67EC65]
+	(No symbol) [0x00007FF73B6C499D]
+	(No symbol) [0x00007FF73B6C4ADC]
+	(No symbol) [0x00007FF73B705B37]
+	(No symbol) [0x00007FF73B6E701F]
+	(No symbol) [0x00007FF73B703412]
+	(No symbol) [0x00007FF73B6E6D83]
+	(No symbol) [0x00007FF73B6B83A8]
+	(No symbol) [0x00007FF73B6B9441]
+	GetHandleVerifier [0x00007FF73BC725AD+4238317]
+	GetHandleVerifier [0x00007FF73BCAF70D+4488525]
+	GetHandleVerifier [0x00007FF73BCA79EF+4456495]
+	GetHandleVerifier [0x00007FF73B950576+953270]
+	(No symbol) [0x00007FF73B7EE54F]
+	(No symbol) [0x00007FF73B7E9224]
+	(No symbol) [0x00007FF73B7E935B]
+	(No symbol) [0x00007FF73B7D9B94]
+	BaseThreadInitThunk [0x00007FFF7E0D257D+29]
+	RtlUserThreadStart [0x00007FFF7F2EAA48+40]
+
+Message: no such element: Unable to locate element: {&quot;method&quot;:&quot;xpath&quot;,&quot;selector&quot;:&quot;//button[text()=&#x27;Proceed&#x27;]&quot;}
+  (Session info: chrome=124.0.6367.119)
+Stacktrace:
+	GetHandleVerifier [0x00007FF73B877032+63090]
+	(No symbol) [0x00007FF73B7E2C82]
+	(No symbol) [0x00007FF73B67EC65]
+	(No symbol) [0x00007FF73B6C499D]
+	(No symbol) [0x00007FF73B6C4ADC]
+	(No symbol) [0x00007FF73B705B37]
+	(No symbol) [0x00007FF73B6E701F]
+	(No symbol) [0x00007FF73B703412]
+	(No symbol) [0x00007FF73B6E6D83]
+	(No symbol) [0x00007FF73B6B83A8]
+	(No symbol) [0x00007FF73B6B9441]
+	GetHandleVerifier [0x00007FF73BC725AD+4238317]
+	GetHandleVerifier [0x00007FF73BCAF70D+4488525]
+	GetHandleVerifier [0x00007FF73BCA79EF+4456495]
+	GetHandleVerifier [0x00007FF73B950576+953270]
+	(No symbol) [0x00007FF73B7EE54F]
+	(No symbol) [0x00007FF73B7E9224]
+	(No symbol) [0x00007FF73B7E935B]
+	(No symbol) [0x00007FF73B7D9B94]
+	BaseThreadInitThunk [0x00007FFF7E0D257D+29]
+	RtlUserThreadStart [0x00007FFF7F2EAA48+40]
+
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_MoreDevice.py::TestMoreDevice_Plan::test_MoreDevices_Plan</td>
+          <td class="col-duration">89.59</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="test_MoreDevice.py_TestMoreDevice_Plan_test_MoreDevices_Plan.png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">self = &lt;tests.test_MoreDevice.TestMoreDevice_Plan object at 0x000001E37D6D04C0&gt;<br/><br/>    def test_MoreDevices_Plan(self):<br/>        self.driver.maximize_window()<br/>        self.implicitlyWaitTime(5)<br/>        Dplan = DevicePlan(self.driver)<br/>        # Dplan.getPlanPage().click()<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 1000);&quot;)<br/>        self.selectionOptionByText(Dplan.getPlanLines(), &quot;2&quot;)<br/>        Dplan.getAddPlan().click()<br/>        # Dplan.getAllDevice().click()<br/>        Dplan.getDevice1().click()<br/>        Dplan.getAdd_toCard().click()<br/>        wait = WebDriverWait(self.driver, 10)<br/>        wait.until(expected_conditions.element_to_be_clickable((By.XPATH, &quot;//div[@class=&#x27;swal-title&#x27;]&quot;)))<br/>        Add_toCard_Message = Dplan.getAdd_toCard_Message().text<br/>        print(&quot;Add_toCard_Message&quot;, Add_toCard_Message)<br/>        assert &quot;successfully&quot; in Add_toCard_Message<br/>        Dplan.getAdd_More_Device().click()<br/>        Dplan.getDevice2().click()<br/>        Dplan.getAdd_toCard().click()<br/>        Dplan.getGo_toCard().click()<br/>        Dplan.getBilling_Zip().send_keys(&quot;30344&quot;)<br/>        Dplan.getUpdate_Button().click()<br/>        wait = WebDriverWait(self.driver, 10)<br/>        wait.until(expected_conditions.element_to_be_clickable((By.XPATH, &quot;//button[text()=&#x27;Proceed to Checkout&#x27;]&quot;)))<br/>        Dplan.getProceed_toCheckout().click()<br/>        wait = WebDriverWait(self.driver, 10)<br/>        wait.until(expected_conditions.presence_of_element_located((By.XPATH, &quot;//input[@id=&#x27;email&#x27;]&quot;)))<br/>        Dplan.getEmail().send_keys(&quot;TestOrder@vcaremail.com&quot;)<br/>        Dplan.getPhone().send_keys(&quot;1234567890&quot;)<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 500);&quot;)<br/>        Dplan.get_Continue_Page().click()<br/>        Dplan.get_eBillingAddress1().send_keys(&quot;2982 DUKE OF WINDSOR&quot;)<br/>        Dplan.get_eBillingAddress2().click()<br/>        try:<br/>            wait = WebDriverWait(self.driver, 5)<br/>            wait.until(expected_conditions.presence_of_element_located((By.XPATH, &quot;//button[text()=&#x27;Proceed&#x27;]&quot;)))<br/>        except Exception as e:<br/>            print(e)<br/>    <br/>        try:<br/>            Dplan.get_Address_suggetion().click()<br/>        except Exception as e:<br/>            print(e)<br/>    <br/>        self.driver.execute_script(&quot;window.scrollBy(0, 900);&quot;)<br/>        Dplan.getShippingMethod().click()<br/>        self.selectionOptionByText(Dplan.getHear_About(), &quot;14&quot;)<br/>        Dplan.getAfter_shipping_Continue().click()<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 1500);&quot;)<br/>        Dplan.getName_onCard().send_keys(&quot;TestCard&quot;)<br/>        Dplan.getCard_Number().send_keys(&quot;4111111111111111&quot;)<br/>        self.selectionOptionByText(Dplan.getExp_Month(), &quot;03&quot;)<br/>        self.selectionOptionByText(Dplan.getExp_Year(), &quot;2026&quot;)<br/>        Dplan.getCard_CVV().send_keys(&quot;231&quot;)<br/>        # self.driver.execute_script(&quot;window.scrollBy(0, 2200);&quot;)<br/>        Dplan.getAfterCard_Continue().click()<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 2200);&quot;)<br/>        time.sleep(3)<br/>    <br/>        ########################################################<br/>        wait = WebDriverWait(self.driver, 10)<br/>&gt;       wait.until(expected_conditions.element_to_be_clickable((By.ID, &quot;fifth&quot;)))<br/><br/>test_MoreDevice.py:73: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.support.wait.WebDriverWait (session=&quot;1ab88229a60e5424edd55ab255e31601&quot;)&gt;<br/>method = &lt;function element_to_be_clickable.&lt;locals&gt;._predicate at 0x000001E37D795510&gt;<br/>message = &#x27;&#x27;<br/><br/>    def until(self, method, message: str = &quot;&quot;):<br/>        &quot;&quot;&quot;Calls the method provided with the driver as an argument until the \<br/>        return value does not evaluate to ``False``.<br/>    <br/>        :param method: callable(WebDriver)<br/>        :param message: optional message for :exc:`TimeoutException`<br/>        :returns: the result of the last call to `method`<br/>        :raises: :exc:`selenium.common.exceptions.TimeoutException` if timeout occurs<br/>        &quot;&quot;&quot;<br/>        screen = None<br/>        stacktrace = None<br/>    <br/>        end_time = time.monotonic() + self._timeout<br/>        while True:<br/>            try:<br/>                value = method(self._driver)<br/>                if value:<br/>                    return value<br/>            except self._ignored_exceptions as exc:<br/>                screen = getattr(exc, &#x27;screen&#x27;, None)<br/>                stacktrace = getattr(exc, &#x27;stacktrace&#x27;, None)<br/>            time.sleep(self._poll)<br/>            if time.monotonic() &gt; end_time:<br/>                break<br/>&gt;       raise TimeoutException(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.TimeoutException: Message:</span><br/><br/>..\..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\selenium\webdriver\support\wait.py:90: TimeoutException<br/> ------------------------------Captured stdout call------------------------------ <br/>Add_toCard_Message Device added to cart successfully.
+Message: 
+Stacktrace:
+	GetHandleVerifier [0x00007FF73B877032+63090]
+	(No symbol) [0x00007FF73B7E2C82]
+	(No symbol) [0x00007FF73B67EC65]
+	(No symbol) [0x00007FF73B6C499D]
+	(No symbol) [0x00007FF73B6C4ADC]
+	(No symbol) [0x00007FF73B705B37]
+	(No symbol) [0x00007FF73B6E701F]
+	(No symbol) [0x00007FF73B703412]
+	(No symbol) [0x00007FF73B6E6D83]
+	(No symbol) [0x00007FF73B6B83A8]
+	(No symbol) [0x00007FF73B6B9441]
+	GetHandleVerifier [0x00007FF73BC725AD+4238317]
+	GetHandleVerifier [0x00007FF73BCAF70D+4488525]
+	GetHandleVerifier [0x00007FF73BCA79EF+4456495]
+	GetHandleVerifier [0x00007FF73B950576+953270]
+	(No symbol) [0x00007FF73B7EE54F]
+	(No symbol) [0x00007FF73B7E9224]
+	(No symbol) [0x00007FF73B7E935B]
+	(No symbol) [0x00007FF73B7D9B94]
+	BaseThreadInitThunk [0x00007FFF7E0D257D+29]
+	RtlUserThreadStart [0x00007FFF7F2EAA48+40]
+
+Message: no such element: Unable to locate element: {&quot;method&quot;:&quot;xpath&quot;,&quot;selector&quot;:&quot;//button[text()=&#x27;Proceed&#x27;]&quot;}
+  (Session info: chrome=124.0.6367.119)
+Stacktrace:
+	GetHandleVerifier [0x00007FF73B877032+63090]
+	(No symbol) [0x00007FF73B7E2C82]
+	(No symbol) [0x00007FF73B67EC65]
+	(No symbol) [0x00007FF73B6C499D]
+	(No symbol) [0x00007FF73B6C4ADC]
+	(No symbol) [0x00007FF73B705B37]
+	(No symbol) [0x00007FF73B6E701F]
+	(No symbol) [0x00007FF73B703412]
+	(No symbol) [0x00007FF73B6E6D83]
+	(No symbol) [0x00007FF73B6B83A8]
+	(No symbol) [0x00007FF73B6B9441]
+	GetHandleVerifier [0x00007FF73BC725AD+4238317]
+	GetHandleVerifier [0x00007FF73BCAF70D+4488525]
+	GetHandleVerifier [0x00007FF73BCA79EF+4456495]
+	GetHandleVerifier [0x00007FF73B950576+953270]
+	(No symbol) [0x00007FF73B7EE54F]
+	(No symbol) [0x00007FF73B7E9224]
+	(No symbol) [0x00007FF73B7E935B]
+	(No symbol) [0x00007FF73B7D9B94]
+	BaseThreadInitThunk [0x00007FFF7E0D257D+29]
+	RtlUserThreadStart [0x00007FFF7F2EAA48+40]
+
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_SinglePlan.py::TestSinglePlan::test_SinglePlan</td>
+          <td class="col-duration">66.99</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="test_SinglePlan.py_TestSinglePlan_test_SinglePlan.png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">self = &lt;tests.test_SinglePlan.TestSinglePlan object at 0x000001E37D6D01F0&gt;<br/><br/>    def test_SinglePlan(self):<br/>        self.driver.maximize_window()<br/>        self.implicitlyWaitTime(5)<br/>        Dplan = DevicePlan(self.driver)<br/>        # Dplan.getPlanPage().click()<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 1000);&quot;)<br/>        self.selectionOptionByText(Dplan.getPlanLines(), &quot;1&quot;)<br/>        Dplan.getAddPlan().click()<br/>        # Dplan.getAllDevice().click()<br/>        Dplan.get_skip_Device().click()<br/>        Dplan.getBilling_Zip().send_keys(&quot;30344&quot;)<br/>        Dplan.getUpdate_Button().click()<br/>        # Dplan.getPromoCode().send_keys(&quot;4545&quot;)<br/>        # Dplan.getApply_promoCode().click()<br/>        # wait = WebDriverWait(self.driver, 10)<br/>        # wait.until(expected_conditions.presence_of_element_located((By.XPATH, &quot;//button[text()=&#x27;Proceed to Checkout&#x27;]&quot;)))<br/>    <br/>        wait = WebDriverWait(self.driver, 10)<br/>        wait.until(expected_conditions.element_to_be_clickable((By.XPATH, &quot;//button[text()=&#x27;Proceed to Checkout&#x27;]&quot;)))<br/>    <br/>        Dplan.getProceed_toCheckout().click()<br/>        Dplan.getEmail().send_keys(&quot;testorder@vcaremail.com&quot;)<br/>        Dplan.getPhone().send_keys(&quot;1234567890&quot;)<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 500);&quot;)<br/>        Dplan.get_Continue_Page().click()<br/>        Dplan.get_eBillingAddress1().send_keys(&quot;2982 DUKE OF WINDSOR&quot;)<br/>        Dplan.get_eBillingAddress2().click()<br/>        try:<br/>            wait = WebDriverWait(self.driver, 5)<br/>            wait.until(expected_conditions.presence_of_element_located((By.XPATH, &quot;//button[text()=&#x27;Proceed&#x27;]&quot;)))<br/>        except Exception as e:<br/>            print(e)<br/>    <br/>        try:<br/>            Dplan.get_Address_suggetion().click()<br/>        except Exception as e:<br/>            print(e)<br/>    <br/>        self.driver.execute_script(&quot;window.scrollBy(0, 900);&quot;)<br/>        Dplan.getShippingMethod().click()<br/>        self.selectionOptionByText(Dplan.getHear_About(), &quot;14&quot;)<br/>        Dplan.getAfter_shipping_Continue().click()<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 1500);&quot;)<br/>        Dplan.getName_onCard().send_keys(&quot;TestCard&quot;)<br/>        Dplan.getCard_Number().send_keys(&quot;4111111111111111&quot;)<br/>        self.selectionOptionByText(Dplan.getExp_Month(), &quot;03&quot;)<br/>        self.selectionOptionByText(Dplan.getExp_Year(), &quot;2026&quot;)<br/>        Dplan.getCard_CVV().send_keys(&quot;231&quot;)<br/>        # self.driver.execute_script(&quot;window.scrollBy(0, 2200);&quot;)<br/>        Dplan.getAfterCard_Continue().click()<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 2200);&quot;)<br/>        time.sleep(3)<br/>    <br/>        ########################################################<br/>        wait = WebDriverWait(self.driver, 10)<br/>        wait.until(expected_conditions.element_to_be_clickable((By.ID, &quot;fifth&quot;)))<br/>        Dplan.getAfter_TransfPhone_Continue().click()<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 1200);&quot;)<br/>        wait = WebDriverWait(self.driver, 10)<br/>        wait.until(expected_conditions.element_to_be_clickable((By.ID, &quot;fname&quot;)))<br/>        Dplan.getFirst_Name().send_keys(&quot;Test&quot;)<br/>        Dplan.getLast_Name().send_keys(&quot;Order&quot;)<br/>        Dplan.getPassword().send_keys(&quot;Test@12345&quot;)<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 500);&quot;)<br/>        self.selectionOptionByText(Dplan.getSecurity_Ques(), &quot;What was your favorite subject in school?&quot;)<br/>        Dplan.getSecurity_Ans().send_keys(&quot;TestOrder&quot;)<br/>        # wait = WebDriverWait(self.driver, 10)<br/>        # wait.until(expected_conditions.presence_of_element_located((By.ID, &quot;agreed_doc&quot;)))<br/>        wait = WebDriverWait(self.driver, 10)<br/>        wait.until(expected_conditions.element_to_be_clickable((By.ID, &quot;agreed_doc&quot;)))<br/>&gt;       Dplan.getAgree_TC().click()<br/><br/>test_SinglePlan.py:82: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/>..\..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\selenium\webdriver\remote\webelement.py:88: in click<br/>    self._execute(Command.CLICK_ELEMENT)<br/>..\..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\selenium\webdriver\remote\webelement.py:396: in _execute<br/>    return self._parent.execute(command, params)<br/>..\..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\selenium\webdriver\remote\webdriver.py:428: in execute<br/>    self.error_handler.check_response(response)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x000001E37D7AC280&gt;<br/>response = {&#x27;status&#x27;: 400, &#x27;value&#x27;: &#x27;{&quot;value&quot;:{&quot;error&quot;:&quot;element click intercepted&quot;,&quot;message&quot;:&quot;element click intercepted: Element ...07FF73B7D9B94]\\n\\tBaseThreadInitThunk [0x00007FFF7E0D257D+29]\\n\\tRtlUserThreadStart [0x00007FFF7F2EAA48+40]\\n&quot;}}&#x27;}<br/><br/>    def check_response(self, response: Dict[str, Any]) -&gt; None:<br/>        &quot;&quot;&quot;<br/>        Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>        :Args:<br/>         - response - The JSON response from the WebDriver server as a dictionary<br/>           object.<br/>    <br/>        :Raises: If the response contains an error message.<br/>        &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if not status or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen: str = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, str):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if not status:<br/>                        status = value.get(&quot;status&quot;, ErrorCode.UNKNOWN_ERROR)<br/>                        message = value.get(&quot;value&quot;) or value.get(&quot;message&quot;)<br/>                        if not isinstance(message, str):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class: Type[WebDriverException]<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_SHADOW_ROOT:<br/>            exception_class = NoSuchShadowRootException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if not value:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, str):<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None  # type: ignore[assignment]<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        st_value = value.get(&#x27;stackTrace&#x27;) or value.get(&#x27;stacktrace&#x27;)<br/>        if st_value:<br/>            if isinstance(st_value, str):<br/>                stacktrace = st_value.split(&#x27;\n&#x27;)<br/>            else:<br/>                stacktrace = []<br/>                try:<br/>                    for frame in st_value:<br/>                        line = frame.get(&quot;lineNumber&quot;, &quot;&quot;)<br/>                        file = frame.get(&quot;fileName&quot;, &quot;&lt;anonymous&gt;&quot;)<br/>                        if line:<br/>                            file = f&quot;{file}:{line}&quot;<br/>                        meth = frame.get(&#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                        if &#x27;className&#x27; in frame:<br/>                            meth = &quot;{}.{}&quot;.format(frame[&#x27;className&#x27;], meth)<br/>                        msg = &quot;    at %s (%s)&quot;<br/>                        msg = msg % (meth, file)<br/>                        stacktrace.append(msg)<br/>                except TypeError:<br/>                    pass<br/>        if exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)  # type: ignore[call-arg]  # mypy is not smart enough here<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.ElementClickInterceptedException: Message: element click intercepted: Element &lt;input type=&quot;checkbox&quot; id=&quot;agreed_doc&quot; class=&quot;custom-control-input paymentDetailCheckout removeDetail&quot; name=&quot;agreed_doc&quot; value=&quot;y&quot; autocomplete=&quot;nope&quot;&gt; is not clickable at point (146, 575). Other element would receive the click: &lt;div&gt;...&lt;/div&gt;</span><br/><span class="error">E         (Session info: chrome=124.0.6367.119)</span><br/><span class="error">E       Stacktrace:</span><br/><span class="error">E       	GetHandleVerifier [0x00007FF73B877032+63090]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B7E2C82]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B67EC65]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6CBB34]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6C9954]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6C7164]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6C5EF9]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6BA708]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6E6FDA]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6BA00A]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6E71F0]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B703412]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6E6D83]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6B83A8]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6B9441]</span><br/><span class="error">E       	GetHandleVerifier [0x00007FF73BC725AD+4238317]</span><br/><span class="error">E       	GetHandleVerifier [0x00007FF73BCAF70D+4488525]</span><br/><span class="error">E       	GetHandleVerifier [0x00007FF73BCA79EF+4456495]</span><br/><span class="error">E       	GetHandleVerifier [0x00007FF73B950576+953270]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B7EE54F]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B7E9224]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B7E935B]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B7D9B94]</span><br/><span class="error">E       	BaseThreadInitThunk [0x00007FFF7E0D257D+29]</span><br/><span class="error">E       	RtlUserThreadStart [0x00007FFF7F2EAA48+40]</span><br/><br/>..\..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\selenium\webdriver\remote\errorhandler.py:243: ElementClickInterceptedException<br/> ------------------------------Captured stdout call------------------------------ <br/>Message: 
+Stacktrace:
+	GetHandleVerifier [0x00007FF73B877032+63090]
+	(No symbol) [0x00007FF73B7E2C82]
+	(No symbol) [0x00007FF73B67EC65]
+	(No symbol) [0x00007FF73B6C499D]
+	(No symbol) [0x00007FF73B6C4ADC]
+	(No symbol) [0x00007FF73B705B37]
+	(No symbol) [0x00007FF73B6E701F]
+	(No symbol) [0x00007FF73B703412]
+	(No symbol) [0x00007FF73B6E6D83]
+	(No symbol) [0x00007FF73B6B83A8]
+	(No symbol) [0x00007FF73B6B9441]
+	GetHandleVerifier [0x00007FF73BC725AD+4238317]
+	GetHandleVerifier [0x00007FF73BCAF70D+4488525]
+	GetHandleVerifier [0x00007FF73BCA79EF+4456495]
+	GetHandleVerifier [0x00007FF73B950576+953270]
+	(No symbol) [0x00007FF73B7EE54F]
+	(No symbol) [0x00007FF73B7E9224]
+	(No symbol) [0x00007FF73B7E935B]
+	(No symbol) [0x00007FF73B7D9B94]
+	BaseThreadInitThunk [0x00007FFF7E0D257D+29]
+	RtlUserThreadStart [0x00007FFF7F2EAA48+40]
+
+Message: no such element: Unable to locate element: {&quot;method&quot;:&quot;xpath&quot;,&quot;selector&quot;:&quot;//button[text()=&#x27;Proceed&#x27;]&quot;}
+  (Session info: chrome=124.0.6367.119)
+Stacktrace:
+	GetHandleVerifier [0x00007FF73B877032+63090]
+	(No symbol) [0x00007FF73B7E2C82]
+	(No symbol) [0x00007FF73B67EC65]
+	(No symbol) [0x00007FF73B6C499D]
+	(No symbol) [0x00007FF73B6C4ADC]
+	(No symbol) [0x00007FF73B705B37]
+	(No symbol) [0x00007FF73B6E701F]
+	(No symbol) [0x00007FF73B703412]
+	(No symbol) [0x00007FF73B6E6D83]
+	(No symbol) [0x00007FF73B6B83A8]
+	(No symbol) [0x00007FF73B6B9441]
+	GetHandleVerifier [0x00007FF73BC725AD+4238317]
+	GetHandleVerifier [0x00007FF73BCAF70D+4488525]
+	GetHandleVerifier [0x00007FF73BCA79EF+4456495]
+	GetHandleVerifier [0x00007FF73B950576+953270]
+	(No symbol) [0x00007FF73B7EE54F]
+	(No symbol) [0x00007FF73B7E9224]
+	(No symbol) [0x00007FF73B7E935B]
+	(No symbol) [0x00007FF73B7D9B94]
+	BaseThreadInitThunk [0x00007FFF7E0D257D+29]
+	RtlUserThreadStart [0x00007FFF7F2EAA48+40]
+
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_SinglePlanTwoDevice_GoToCart.py::TestMoreDevice_Plan::test_SinglePlanTwoDevice_GoToCart</td>
+          <td class="col-duration">96.18</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="test_SinglePlanTwoDevice_GoToCart.py_TestMoreDevice_Plan_test_SinglePlanTwoDevice_GoToCart.png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">self = &lt;tests.test_SinglePlanTwoDevice_GoToCart.TestMoreDevice_Plan object at 0x000001E37D6D09D0&gt;<br/><br/>    def test_SinglePlanTwoDevice_GoToCart(self):<br/>        self.driver.maximize_window()<br/>        self.implicitlyWaitTime(5)<br/>        Dplan = DevicePlan(self.driver)<br/>        # Dplan.getPlanPage().click()<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 1000);&quot;)<br/>        self.selectionOptionByText(Dplan.getPlanLines(), &quot;1&quot;)<br/>        Dplan.getAddPlan().click()<br/>        # Dplan.getAllDevice().click()<br/>        Dplan.getDevice1().click()<br/>        Dplan.getAdd_toCard().click()<br/>        wait = WebDriverWait(self.driver, 10)<br/>        wait.until(expected_conditions.element_to_be_clickable((By.XPATH, &quot;//div[@class=&#x27;swal-title&#x27;]&quot;)))<br/>        Add_toCard_Message = Dplan.getAdd_toCard_Message().text<br/>        print(&quot;Add_toCard_Message&quot;, Add_toCard_Message)<br/>        assert &quot;successfully&quot; in Add_toCard_Message<br/>        Dplan.getAdd_More_Device().click()<br/>        Add_toCard_Message = Dplan.getAdd_toCard_Message().text<br/>        print(&quot;Add_toCard_Message&quot;, Add_toCard_Message)<br/>        assert &quot;You&#x27;ve reached the device limit. The number of devices cannot exceed the number of lines.&quot; in Add_toCard_Message<br/>    <br/>        Dplan.getGo_toCard().click()<br/>        Dplan.getBilling_Zip().send_keys(&quot;30344&quot;)<br/>        Dplan.getUpdate_Button().click()<br/>        wait = WebDriverWait(self.driver, 10)<br/>        wait.until(expected_conditions.element_to_be_clickable((By.XPATH, &quot;//button[text()=&#x27;Proceed to Checkout&#x27;]&quot;)))<br/>        Dplan.getProceed_toCheckout().click()<br/>        wait = WebDriverWait(self.driver, 10)<br/>        wait.until(expected_conditions.presence_of_element_located((By.XPATH, &quot;//input[@id=&#x27;email&#x27;]&quot;)))<br/>        Dplan.getEmail().send_keys(&quot;TestOrder@vcaremail.com&quot;)<br/>        Dplan.getPhone().send_keys(&quot;1234567890&quot;)<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 500);&quot;)<br/>        Dplan.get_Continue_Page().click()<br/>        Dplan.get_eBillingAddress1().send_keys(&quot;2982 DUKE OF WINDSOR&quot;)<br/>        Dplan.get_eBillingAddress2().click()<br/>        try:<br/>            wait = WebDriverWait(self.driver, 5)<br/>            wait.until(expected_conditions.presence_of_element_located((By.XPATH, &quot;//button[text()=&#x27;Proceed&#x27;]&quot;)))<br/>        except Exception as e:<br/>            print(e)<br/>    <br/>        try:<br/>            Dplan.get_Address_suggetion().click()<br/>        except Exception as e:<br/>            print(e)<br/>    <br/>        self.driver.execute_script(&quot;window.scrollBy(0, 900);&quot;)<br/>        Dplan.getShippingMethod().click()<br/>        self.selectionOptionByText(Dplan.getHear_About(), &quot;14&quot;)<br/>        Dplan.getAfter_shipping_Continue().click()<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 1500);&quot;)<br/>        Dplan.getName_onCard().send_keys(&quot;TestCard&quot;)<br/>        Dplan.getCard_Number().send_keys(&quot;4111111111111111&quot;)<br/>        self.selectionOptionByText(Dplan.getExp_Month(), &quot;03&quot;)<br/>        self.selectionOptionByText(Dplan.getExp_Year(), &quot;2026&quot;)<br/>        Dplan.getCard_CVV().send_keys(&quot;231&quot;)<br/>        # self.driver.execute_script(&quot;window.scrollBy(0, 2200);&quot;)<br/>        Dplan.getAfterCard_Continue().click()<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 2200);&quot;)<br/>        time.sleep(3)<br/>    <br/>        ########################################################<br/>        wait = WebDriverWait(self.driver, 10)<br/>&gt;       wait.until(expected_conditions.element_to_be_clickable((By.ID, &quot;fifth&quot;)))<br/><br/>test_SinglePlanTwoDevice_GoToCart.py:75: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.support.wait.WebDriverWait (session=&quot;56137f9b4db3ca3dc01a5a31a6b0ad30&quot;)&gt;<br/>method = &lt;function element_to_be_clickable.&lt;locals&gt;._predicate at 0x000001E37B039120&gt;<br/>message = &#x27;&#x27;<br/><br/>    def until(self, method, message: str = &quot;&quot;):<br/>        &quot;&quot;&quot;Calls the method provided with the driver as an argument until the \<br/>        return value does not evaluate to ``False``.<br/>    <br/>        :param method: callable(WebDriver)<br/>        :param message: optional message for :exc:`TimeoutException`<br/>        :returns: the result of the last call to `method`<br/>        :raises: :exc:`selenium.common.exceptions.TimeoutException` if timeout occurs<br/>        &quot;&quot;&quot;<br/>        screen = None<br/>        stacktrace = None<br/>    <br/>        end_time = time.monotonic() + self._timeout<br/>        while True:<br/>            try:<br/>                value = method(self._driver)<br/>                if value:<br/>                    return value<br/>            except self._ignored_exceptions as exc:<br/>                screen = getattr(exc, &#x27;screen&#x27;, None)<br/>                stacktrace = getattr(exc, &#x27;stacktrace&#x27;, None)<br/>            time.sleep(self._poll)<br/>            if time.monotonic() &gt; end_time:<br/>                break<br/>&gt;       raise TimeoutException(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.TimeoutException: Message:</span><br/><br/>..\..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\selenium\webdriver\support\wait.py:90: TimeoutException<br/> ------------------------------Captured stdout call------------------------------ <br/>Add_toCard_Message Device added to cart successfully.
+Add_toCard_Message You&#x27;ve reached the device limit. The number of devices cannot exceed the number of lines.
+Message: 
+Stacktrace:
+	GetHandleVerifier [0x00007FF73B877032+63090]
+	(No symbol) [0x00007FF73B7E2C82]
+	(No symbol) [0x00007FF73B67EC65]
+	(No symbol) [0x00007FF73B6C499D]
+	(No symbol) [0x00007FF73B6C4ADC]
+	(No symbol) [0x00007FF73B705B37]
+	(No symbol) [0x00007FF73B6E701F]
+	(No symbol) [0x00007FF73B703412]
+	(No symbol) [0x00007FF73B6E6D83]
+	(No symbol) [0x00007FF73B6B83A8]
+	(No symbol) [0x00007FF73B6B9441]
+	GetHandleVerifier [0x00007FF73BC725AD+4238317]
+	GetHandleVerifier [0x00007FF73BCAF70D+4488525]
+	GetHandleVerifier [0x00007FF73BCA79EF+4456495]
+	GetHandleVerifier [0x00007FF73B950576+953270]
+	(No symbol) [0x00007FF73B7EE54F]
+	(No symbol) [0x00007FF73B7E9224]
+	(No symbol) [0x00007FF73B7E935B]
+	(No symbol) [0x00007FF73B7D9B94]
+	BaseThreadInitThunk [0x00007FFF7E0D257D+29]
+	RtlUserThreadStart [0x00007FFF7F2EAA48+40]
+
+Message: no such element: Unable to locate element: {&quot;method&quot;:&quot;xpath&quot;,&quot;selector&quot;:&quot;//button[text()=&#x27;Proceed&#x27;]&quot;}
+  (Session info: chrome=124.0.6367.119)
+Stacktrace:
+	GetHandleVerifier [0x00007FF73B877032+63090]
+	(No symbol) [0x00007FF73B7E2C82]
+	(No symbol) [0x00007FF73B67EC65]
+	(No symbol) [0x00007FF73B6C499D]
+	(No symbol) [0x00007FF73B6C4ADC]
+	(No symbol) [0x00007FF73B705B37]
+	(No symbol) [0x00007FF73B6E701F]
+	(No symbol) [0x00007FF73B703412]
+	(No symbol) [0x00007FF73B6E6D83]
+	(No symbol) [0x00007FF73B6B83A8]
+	(No symbol) [0x00007FF73B6B9441]
+	GetHandleVerifier [0x00007FF73BC725AD+4238317]
+	GetHandleVerifier [0x00007FF73BCAF70D+4488525]
+	GetHandleVerifier [0x00007FF73BCA79EF+4456495]
+	GetHandleVerifier [0x00007FF73B950576+953270]
+	(No symbol) [0x00007FF73B7EE54F]
+	(No symbol) [0x00007FF73B7E9224]
+	(No symbol) [0x00007FF73B7E935B]
+	(No symbol) [0x00007FF73B7D9B94]
+	BaseThreadInitThunk [0x00007FFF7E0D257D+29]
+	RtlUserThreadStart [0x00007FFF7F2EAA48+40]
+
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_SinglePlanTwoDevice_GoToPlanPage.py::TestMoreDevice_Plan::test_SinglePlanTwoDevice_GoToPlanPage</td>
+          <td class="col-duration">112.87</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="test_SinglePlanTwoDevice_GoToPlanPage.py_TestMoreDevice_Plan_test_SinglePlanTwoDevice_GoToPlanPage.png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">self = &lt;tests.test_SinglePlanTwoDevice_GoToPlanPage.TestMoreDevice_Plan object at 0x000001E37D6D0D00&gt;<br/><br/>    def test_SinglePlanTwoDevice_GoToPlanPage(self):<br/>        self.driver.maximize_window()<br/>        self.implicitlyWaitTime(5)<br/>        Dplan = DevicePlan(self.driver)<br/>        # Dplan.getPlanPage().click()<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 1000);&quot;)<br/>        self.selectionOptionByText(Dplan.getPlanLines(), &quot;1&quot;)<br/>        Dplan.getAddPlan().click()<br/>        # Dplan.getAllDevice().click()<br/>        Dplan.getDevice1().click()<br/>        Dplan.getAdd_toCard().click()<br/>        wait = WebDriverWait(self.driver, 10)<br/>        wait.until(expected_conditions.element_to_be_clickable((By.XPATH, &quot;//div[@class=&#x27;swal-title&#x27;]&quot;)))<br/>        Add_toCard_Message = Dplan.getAdd_toCard_Message().text<br/>        print(&quot;Add_toCard_Message&quot;, Add_toCard_Message)<br/>        assert &quot;successfully&quot; in Add_toCard_Message<br/>        Dplan.getAdd_More_Device().click()<br/>        Add_toCard_Message = Dplan.getAdd_toCard_Message().text<br/>        print(&quot;Add_toCard_Message&quot;, Add_toCard_Message)<br/>        assert &quot;You&#x27;ve reached the device limit. The number of devices cannot exceed the number of lines.&quot; in Add_toCard_Message<br/>        Dplan.getGo_ToPlanPage().click()<br/>        Dplan.getAddPlan().click()<br/>    <br/>        Dplan.getDevice2().click()<br/>        Dplan.getAdd_toCard().click()<br/>        Dplan.getGo_toCard().click()<br/>        Dplan.getBilling_Zip().send_keys(&quot;30344&quot;)<br/>        Dplan.getUpdate_Button().click()<br/>        wait = WebDriverWait(self.driver, 10)<br/>        wait.until(expected_conditions.element_to_be_clickable((By.XPATH, &quot;//button[text()=&#x27;Proceed to Checkout&#x27;]&quot;)))<br/>        Dplan.getProceed_toCheckout().click()<br/>        wait = WebDriverWait(self.driver, 10)<br/>        wait.until(expected_conditions.presence_of_element_located((By.XPATH, &quot;//input[@id=&#x27;email&#x27;]&quot;)))<br/>        Dplan.getEmail().send_keys(&quot;TestOrder@vcaremail.com&quot;)<br/>        Dplan.getPhone().send_keys(&quot;1234567890&quot;)<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 500);&quot;)<br/>        Dplan.get_Continue_Page().click()<br/>        Dplan.get_eBillingAddress1().send_keys(&quot;2982 DUKE OF WINDSOR&quot;)<br/>        Dplan.get_eBillingAddress2().click()<br/>        try:<br/>            wait = WebDriverWait(self.driver, 2)<br/>            wait.until(expected_conditions.presence_of_element_located((By.XPATH, &quot;//button[text()=&#x27;Proceed&#x27;]&quot;)))<br/>        except Exception as e:<br/>            print(e)<br/>    <br/>        try:<br/>            Dplan.get_Address_suggetion().click()<br/>        except Exception as e:<br/>            print(e)<br/>    <br/>        self.driver.execute_script(&quot;window.scrollBy(0, 900);&quot;)<br/>        wait = WebDriverWait(self.driver, 10)<br/>        wait.until(expected_conditions.element_to_be_clickable((By.XPATH, &quot;//input[@value=&#x27;2&#x27;]&quot;)))<br/>        # time.sleep(4)<br/>        Dplan.getShippingMethod().click()<br/>        self.selectionOptionByText(Dplan.getHear_About(), &quot;14&quot;)<br/>        Dplan.getAfter_shipping_Continue().click()<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 500);&quot;)<br/>        Dplan.getName_onCard().send_keys(&quot;TestCard&quot;)<br/>        Dplan.getCard_Number().send_keys(&quot;4111111111111111&quot;)<br/>        self.selectionOptionByText(Dplan.getExp_Month(), &quot;03&quot;)<br/>        self.selectionOptionByText(Dplan.getExp_Year(), &quot;2026&quot;)<br/>        Dplan.getCard_CVV().send_keys(&quot;231&quot;)<br/>        Dplan.getAfterCard_Continue().click()<br/>        self.driver.execute_script(&quot;window.scrollBy(0, 2200);&quot;)<br/>        # wait = WebDriverWait(self.driver, 10)<br/>        # wait.until(expected_conditions.presence_of_element_located((By.ID, &quot;fifth&quot;)))<br/>    <br/>        wait = WebDriverWait(self.driver, 10)<br/>        wait.until(expected_conditions.element_to_be_clickable((By.ID, &quot;fifth&quot;)))<br/>    <br/>&gt;       Dplan.getAfter_TransfPhone_Continue().click()<br/><br/>test_SinglePlanTwoDevice_GoToPlanPage.py:83: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/>..\..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\selenium\webdriver\remote\webelement.py:88: in click<br/>    self._execute(Command.CLICK_ELEMENT)<br/>..\..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\selenium\webdriver\remote\webelement.py:396: in _execute<br/>    return self._parent.execute(command, params)<br/>..\..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\selenium\webdriver\remote\webdriver.py:428: in execute<br/>    self.error_handler.check_response(response)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x000001E37B967340&gt;<br/>response = {&#x27;status&#x27;: 400, &#x27;value&#x27;: &#x27;{&quot;value&quot;:{&quot;error&quot;:&quot;element click intercepted&quot;,&quot;message&quot;:&quot;element click intercepted: Element ...07FF73B7D9B94]\\n\\tBaseThreadInitThunk [0x00007FFF7E0D257D+29]\\n\\tRtlUserThreadStart [0x00007FFF7F2EAA48+40]\\n&quot;}}&#x27;}<br/><br/>    def check_response(self, response: Dict[str, Any]) -&gt; None:<br/>        &quot;&quot;&quot;<br/>        Checks that a JSON response from the WebDriver does not have an error.<br/>    <br/>        :Args:<br/>         - response - The JSON response from the WebDriver server as a dictionary<br/>           object.<br/>    <br/>        :Raises: If the response contains an error message.<br/>        &quot;&quot;&quot;<br/>        status = response.get(&#x27;status&#x27;, None)<br/>        if not status or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen: str = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&#x27;value&#x27;, None)<br/>            if value_json and isinstance(value_json, str):<br/>                import json<br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value.keys()) == 1:<br/>                        value = value[&#x27;value&#x27;]<br/>                    status = value.get(&#x27;error&#x27;, None)<br/>                    if not status:<br/>                        status = value.get(&quot;status&quot;, ErrorCode.UNKNOWN_ERROR)<br/>                        message = value.get(&quot;value&quot;) or value.get(&quot;message&quot;)<br/>                        if not isinstance(message, str):<br/>                            value = message<br/>                            message = message.get(&#x27;message&#x27;)<br/>                    else:<br/>                        message = value.get(&#x27;message&#x27;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class: Type[WebDriverException]<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_SHADOW_ROOT:<br/>            exception_class = NoSuchShadowRootException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif status in ErrorCode.INVALID_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR \<br/>                or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER:<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if not value:<br/>            value = response[&#x27;value&#x27;]<br/>        if isinstance(value, str):<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &#x27;message&#x27; in value:<br/>            message = value[&#x27;message&#x27;]<br/>    <br/>        screen = None  # type: ignore[assignment]<br/>        if &#x27;screen&#x27; in value:<br/>            screen = value[&#x27;screen&#x27;]<br/>    <br/>        stacktrace = None<br/>        st_value = value.get(&#x27;stackTrace&#x27;) or value.get(&#x27;stacktrace&#x27;)<br/>        if st_value:<br/>            if isinstance(st_value, str):<br/>                stacktrace = st_value.split(&#x27;\n&#x27;)<br/>            else:<br/>                stacktrace = []<br/>                try:<br/>                    for frame in st_value:<br/>                        line = frame.get(&quot;lineNumber&quot;, &quot;&quot;)<br/>                        file = frame.get(&quot;fileName&quot;, &quot;&lt;anonymous&gt;&quot;)<br/>                        if line:<br/>                            file = f&quot;{file}:{line}&quot;<br/>                        meth = frame.get(&#x27;methodName&#x27;, &#x27;&lt;anonymous&gt;&#x27;)<br/>                        if &#x27;className&#x27; in frame:<br/>                            meth = &quot;{}.{}&quot;.format(frame[&#x27;className&#x27;], meth)<br/>                        msg = &quot;    at %s (%s)&quot;<br/>                        msg = msg % (meth, file)<br/>                        stacktrace.append(msg)<br/>                except TypeError:<br/>                    pass<br/>        if exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &#x27;data&#x27; in value:<br/>                alert_text = value[&#x27;data&#x27;].get(&#x27;text&#x27;)<br/>            elif &#x27;alert&#x27; in value:<br/>                alert_text = value[&#x27;alert&#x27;].get(&#x27;text&#x27;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)  # type: ignore[call-arg]  # mypy is not smart enough here<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.ElementClickInterceptedException: Message: element click intercepted: Element &lt;button id=&quot;fifth&quot;&gt;...&lt;/button&gt; is not clickable at point (206, 556). Other element would receive the click: &lt;input onkeypress=&quot;return isNumber(event)&quot; type=&quot;text&quot; name=&quot;cust_mdn[]&quot; id=&quot;cust_mdn_1&quot; placeholder=&quot;Current Number&quot; autocomplete=&quot;off&quot; class=&quot;form-control  paymentDetail portin_mdn_validate byodment&quot; autofocus=&quot;&quot; value=&quot;&quot; style=&quot;border: 2px solid rgb(206, 212, 218); max-width: 100% !important;&quot; maxlength=&quot;10&quot;&gt;</span><br/><span class="error">E         (Session info: chrome=124.0.6367.119)</span><br/><span class="error">E       Stacktrace:</span><br/><span class="error">E       	GetHandleVerifier [0x00007FF73B877032+63090]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B7E2C82]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B67EC65]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6CBB34]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6C9954]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6C7164]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6C5EF9]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6BA708]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6E6FDA]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6BA00A]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6E71F0]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B703412]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6E6D83]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6B83A8]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B6B9441]</span><br/><span class="error">E       	GetHandleVerifier [0x00007FF73BC725AD+4238317]</span><br/><span class="error">E       	GetHandleVerifier [0x00007FF73BCAF70D+4488525]</span><br/><span class="error">E       	GetHandleVerifier [0x00007FF73BCA79EF+4456495]</span><br/><span class="error">E       	GetHandleVerifier [0x00007FF73B950576+953270]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B7EE54F]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B7E9224]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B7E935B]</span><br/><span class="error">E       	(No symbol) [0x00007FF73B7D9B94]</span><br/><span class="error">E       	BaseThreadInitThunk [0x00007FFF7E0D257D+29]</span><br/><span class="error">E       	RtlUserThreadStart [0x00007FFF7F2EAA48+40]</span><br/><br/>..\..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\selenium\webdriver\remote\errorhandler.py:243: ElementClickInterceptedException<br/> ------------------------------Captured stdout call------------------------------ <br/>Add_toCard_Message Device added to cart successfully.
+Add_toCard_Message You&#x27;ve reached the device limit. The number of devices cannot exceed the number of lines.
+Message: 
+Stacktrace:
+	GetHandleVerifier [0x00007FF73B877032+63090]
+	(No symbol) [0x00007FF73B7E2C82]
+	(No symbol) [0x00007FF73B67EC65]
+	(No symbol) [0x00007FF73B6C499D]
+	(No symbol) [0x00007FF73B6C4ADC]
+	(No symbol) [0x00007FF73B705B37]
+	(No symbol) [0x00007FF73B6E701F]
+	(No symbol) [0x00007FF73B703412]
+	(No symbol) [0x00007FF73B6E6D83]
+	(No symbol) [0x00007FF73B6B83A8]
+	(No symbol) [0x00007FF73B6B9441]
+	GetHandleVerifier [0x00007FF73BC725AD+4238317]
+	GetHandleVerifier [0x00007FF73BCAF70D+4488525]
+	GetHandleVerifier [0x00007FF73BCA79EF+4456495]
+	GetHandleVerifier [0x00007FF73B950576+953270]
+	(No symbol) [0x00007FF73B7EE54F]
+	(No symbol) [0x00007FF73B7E9224]
+	(No symbol) [0x00007FF73B7E935B]
+	(No symbol) [0x00007FF73B7D9B94]
+	BaseThreadInitThunk [0x00007FFF7E0D257D+29]
+	RtlUserThreadStart [0x00007FFF7F2EAA48+40]
+
+Message: no such element: Unable to locate element: {&quot;method&quot;:&quot;xpath&quot;,&quot;selector&quot;:&quot;//button[text()=&#x27;Proceed&#x27;]&quot;}
+  (Session info: chrome=124.0.6367.119)
+Stacktrace:
+	GetHandleVerifier [0x00007FF73B877032+63090]
+	(No symbol) [0x00007FF73B7E2C82]
+	(No symbol) [0x00007FF73B67EC65]
+	(No symbol) [0x00007FF73B6C499D]
+	(No symbol) [0x00007FF73B6C4ADC]
+	(No symbol) [0x00007FF73B705B37]
+	(No symbol) [0x00007FF73B6E701F]
+	(No symbol) [0x00007FF73B703412]
+	(No symbol) [0x00007FF73B6E6D83]
+	(No symbol) [0x00007FF73B6B83A8]
+	(No symbol) [0x00007FF73B6B9441]
+	GetHandleVerifier [0x00007FF73BC725AD+4238317]
+	GetHandleVerifier [0x00007FF73BCAF70D+4488525]
+	GetHandleVerifier [0x00007FF73BCA79EF+4456495]
+	GetHandleVerifier [0x00007FF73B950576+953270]
+	(No symbol) [0x00007FF73B7EE54F]
+	(No symbol) [0x00007FF73B7E9224]
+	(No symbol) [0x00007FF73B7E935B]
+	(No symbol) [0x00007FF73B7D9B94]
+	BaseThreadInitThunk [0x00007FFF7E0D257D+29]
+	RtlUserThreadStart [0x00007FFF7F2EAA48+40]
+
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_SinglePlan_TwoDevice.py::TestMoreDevice_Plan::test_SinglePlan_TwoDevice</td>
+          <td class="col-duration">33.91</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>Add_toCard_Message Device added to cart successfully.
+Add_toCard_Message You&#x27;ve reached the device limit. The number of devices cannot exceed the number of lines.
+<br/></div></td></tr></tbody></table></body></html>
